@@ -163,7 +163,7 @@ inline string Cache::GetDirection(string instru) {
 inline void Cache::Tag_Index(string dir) {
 	this->Data_tag = dir.substr(0, this->Tag);
 	this->TagContent = this->Bin_Dec(this->Data_tag);
-	string Index = dir.substr(this->Tag, this->Index);
+	string Index = dir.substr((this->Tag)-1, (this->Tag-1)+this->Index);
 	this->Data_Index = this->Bin_Dec(Index);
 }
 inline void Cache::Check() {
