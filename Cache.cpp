@@ -1,4 +1,7 @@
 #include "Cache.h"
+#include <iostream>
+#include <fstream>
+#include "Campo.h"
 
 using namespace std;
 
@@ -15,7 +18,7 @@ inline Cache::Cache(int CSize, int Asso, int LSize) {
 		this->SRRIP_Top = 1;
 	}
 	else {
-		SRRIP_Top = 3;
+		this->SRRIP_Top = 3;
 	}
 	//Seteo de parametros de las instrucciones
 	int Csizebyte = CSize * 1024;
@@ -23,17 +26,19 @@ inline Cache::Cache(int CSize, int Asso, int LSize) {
 	this->Sets = csizelsize/this->Asso;
 	this->Index = log2(this->Sets);
 	this->Offset = log2(LSize);
-	this->Tag = LSize - this->Index - this->Offset;
+	this->Tag = 32 - this->Index - this->Offset;
 
-	this->Cache_Matrix= new int* [this->Asso];
-	this->DBMat= new int* [this->Asso];
-	this->SRRIPMat = new int* [this->Asso];
-	/*this->DBMat = new int*[this->Asso];
-	this->SRRIPMat=*/
-	for (int i = 0;i < this->Asso; i++) {
-		this->Cache_Matrix[i] = new int[this->Sets];
-		this->DBMat[i] = new int[this->Sets];
-		this->SRRIPMat[i] = new int[this->Sets];
+	/*this->Cache_Matrix= new int* [this->Sets];
+	this->DBMat= new int* [this->Sets];
+	this->SRRIPMat = new int* [this->Sets];*/
+
+	this->Cache_Matrix = new Campo*[this->Sets];
+	
+	for (int i = 0;i < this->Sets; i++) {
+		this->Cache_Matrix[i] = new Campo[this->Asso];
+		/*this->Cache_Matrix[i] = new int[this->Asso];
+		this->DBMat[i] = new int[this->Asso];
+		this->SRRIPMat[i] = new int[this->Asso];*/
 	}
 	this->TotalInsts = 0;
 	this->Total_Loads=0;
@@ -50,13 +55,15 @@ inline Cache::~Cache() {
 
 };
 inline void Cache::MatrixInit() {
-	for (int i = 0; i < this->Asso; i++)
+	for (int i = 0; i < this->Sets; i++)
 	{
-		for (int j = 0; j < this->Sets; j++)
+		for (int j = 0; j < this->Asso; j++)
 		{
-			this->Cache_Matrix[i][j] = 0;
-			this->DBMat[i][j] = 0;
-			this->SRRIPMat[i][j] = 0;
+			this->Cache_Matrix[i][j].Valor = 0;
+			this->Cache_Matrix[i][j].RRPV = this->SRRIP_Top;
+			this->Cache_Matrix[i][j].DB = 0;
+			/*this->DBMat[i][j] = 0;
+			this->SRRIPMat[i][j] = this->SRRIP_Top-1;*/
 		}
 	}
 };
@@ -161,24 +168,25 @@ inline string Cache::GetDirection(string instru) {
 	return Direction;
 }
 inline void Cache::Tag_Index(string dir) {
-	this->Data_tag = dir.substr(0, this->Tag);
+	this->Data_tag = dir.substr(0, this->Tag-1);
 	this->TagContent = this->Bin_Dec(this->Data_tag);
-	string Index = dir.substr((this->Tag)-1, (this->Tag-1)+this->Index);
+	string Index = dir.substr(this->Tag, this->Index);
 	this->Data_Index = this->Bin_Dec(Index);
 }
 inline void Cache::Check() {
 	bool ThisHit = false;
-	int HitRow;
+	int HitCol;
 	for (int i = 0; i < this->Asso; i++)
 	{
-		if (this->Cache_Matrix[i][this->Data_Index] == this->TagContent&&ThisHit == false) {
+		if (this->Cache_Matrix[this->Data_Index][i].Valor == this->TagContent && ThisHit == false) {
 			ThisHit = true;
-			HitRow = i;
-			i = this->Asso;
+			HitCol = i;
+			break;
 		}
 	}
 	if (ThisHit == true) {
-		Promote(HitRow);
+		//this->SRRIPMat[this->Data_Index][HitCol] = 0;
+		this->Cache_Matrix[this->Data_Index][HitCol].RRPV = 0;
 		if (this->InstructType == 0) {
 			this->Load_Hits++;
 		}
@@ -197,38 +205,75 @@ inline void Cache::Check() {
 	}
 }
 inline void Cache::Evict() {
-	int ThisRow = 0;
-	while (ThisRow<this->Asso && this->SRRIPMat[ThisRow][this->Data_Index] != this->SRRIP_Top) {
-		ThisRow++;
-		if (ThisRow== this->Asso) {
+	for (int i = 0; i < this->Asso; i++)
+	{
+		//if (this->SRRIPMat[this->Data_Index][i] == this->SRRIP_Top) {
+		if (this->Cache_Matrix[this->Data_Index][i].RRPV == this->SRRIP_Top) {
+			//if (this->DBMat[this->Data_Index][i] == 1) {
+			if (this->Cache_Matrix[this->Data_Index][i].DB == 1) {
+				this->DirtyEvictions++;
+				if (this->InstructType == 0) {
+					//this->DBMat[this->Data_Index][i] = 0;
+					this->Cache_Matrix[this->Data_Index][i].DB = 0;
+				}
+				this->Cache_Matrix[this->Data_Index][i].Valor = this->TagContent;
+				//this->SRRIPMat[this->Data_Index][i] = this->SRRIP_Top - 1;
+				this->Cache_Matrix[this->Data_Index][i].RRPV = this->SRRIP_Top - 1;
+			}
+			else {
+				this->Cache_Matrix[this->Data_Index][i].Valor = this->TagContent;
+				//this->SRRIPMat[this->Data_Index][i] = this->SRRIP_Top - 1;
+				this->Cache_Matrix[this->Data_Index][i].RRPV = this->SRRIP_Top - 1;
+			}
 			break;
 		}
 	}
 
-	if (ThisRow <this->Asso) {
-		if (this->DBMat[ThisRow][this->Data_Index] == 1) {
+
+
+	/*int ThisCol = 0;
+	while (ThisCol<this->Asso) {
+		if (this->SRRIPMat[this->Data_Index][ThisCol] != this->SRRIP_Top) {
+			ThisCol++;
+		}
+		else if (this->DBMat[this->Data_Index][ThisCol] == 1) {
 			this->DirtyEvictions++;
 			if (this->InstructType == 0) {
-				this->DBMat[ThisRow][this->Data_Index] = 0;
+				this->DBMat[this->Data_Index][ThisCol] = 0;
+			}
+			this->Cache_Matrix[this->Data_Index][ThisCol] = this->TagContent;
+			this->SRRIPMat[this->Data_Index][ThisCol] = this->SRRIP_Top - 1;
+		}
+		this->Cache_Matrix[this->Data_Index][ThisCol] = this->TagContent;
+		this->SRRIPMat[this->Data_Index][ThisCol] = this->SRRIP_Top - 1;
+		ThisCol++;
+	}
+
+	if (ThisCol <this->Asso) {
+		if (this->DBMat[this->Data_Index][ThisCol] == 1) {
+			this->DirtyEvictions++;
+			if (this->InstructType == 0) {
+				this->DBMat[this->Data_Index][ThisCol] = 0;
 			}
 		}
-		this->Cache_Matrix[ThisRow][this->Data_Index] = this->TagContent;
-		this->SRRIPMat[ThisRow][this->Data_Index] = this->SRRIP_Top- 1;
+		this->Cache_Matrix[this->Data_Index][ThisCol] = this->TagContent;
+		this->SRRIPMat[this->Data_Index][ThisCol] = this->SRRIP_Top- 1;
 
 	}
 	else {
-		ThisRow = 0;
-		while (ThisRow<this->Asso) {
-			this->SRRIPMat[ThisRow][this->Data_Index]++;
-			ThisRow++;
+		ThisCol = 0;
+		while (ThisCol<this->Asso) {
+			this->SRRIPMat[this->Data_Index][ThisCol]++;
+			ThisCol++;
 		}
 		Evict();
-	}
+	}*/
 }
-inline void Cache::Promote(int Line){
-	this->SRRIPMat[Line][this->Data_Index] = 0;
-}
-inline void Cache::Results() {
+/*inline void Cache::Promote(int Line){
+	this->SRRIPMat[this->Data_Index][Line] = 0;
+}*/
+
+inline void Cache::Results(/*ofstream& csvfile*/) {
 	cout << "********************************************************" << '\n';
 	cout << "                    Cache Parameters: " << '\n';
 	cout << "********************************************************" << '\n';
@@ -249,6 +294,27 @@ inline void Cache::Results() {
 	cout << "Store hits:                               " << this->Store_Hits << '\n';
 	cout << "Total hits:                               " << this->Load_Hits + this->Store_Hits << '\n';
 	cout << "********************************************************" << '\n';
+
+	/*csvfile.open("SimulationResults.csv");
+	csvfile << '\n';
+	csvfile << "Simulation results:,\n";
+	csvfile << '\n';
+	csvfile << "Overall miss rate: , " << Overall_miss_rate << endl;
+	csvfile << "Read miss rate: , " << (double)this->Load_misses / (double)this->Num_loads << endl;
+	csvfile << "Dirty evictions: , " << this->dirty_eviction << endl;
+	csvfile << "Load misses: , " << this->Load_misses << endl;
+	csvfile << "Store misses: , " << this->Store_misses << endl;
+	csvfile << "Total misses: , " << this->Load_misses + this->Store_misses << endl;
+	csvfile << "Load hits: , " << this->Load_hits << endl;
+	csvfile << "Store hits: , " << this->Store_hits << endl;
+	csvfile << "Total hits: , " << this->Load_hits + this->Store_hits << endl;
+	csvfile << "\n\n";
+	csvfile.close();*/
+
+
+	cout << "Presione cualquier tecla para cerrar.";
+	int x;
+	cin >> x;
 }
 inline void Cache::Simulate(string Line) {
 	string TestSubject;

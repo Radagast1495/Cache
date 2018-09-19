@@ -10,6 +10,7 @@
 #include <stdlib.h>    
 #include <string>
 #include "math.h"
+#include "Campo.h"
 
 using namespace std;
 
@@ -32,9 +33,10 @@ class Cache {
 		
 
 		//Almacenamiento
-		int** Cache_Matrix;
+		Campo** Cache_Matrix;
+		/*int ** Cache_Matrix;
 		int** SRRIPMat;
-		int** DBMat;
+		int** DBMat;*/
 		int Data_Index;
 		int InstructType;
 		string Data_tag;
@@ -60,7 +62,7 @@ class Cache {
 		void Evict();
 		void Promote(int Line);
 		void Simulate(string Line);
-		void Results();
+		void Results(/*ofstream& csvfile*/);
 		string Hex_Bin(string Hex);
 		int Bin_Dec(string bin);
 		string GetDirection(string Line);

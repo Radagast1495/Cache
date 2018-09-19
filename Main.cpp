@@ -19,5 +19,7 @@ int main(int argc, char const *argv[]) {
 	while (getline(Archivo, Linea)) {
 		CacheInst.Simulate(Linea);
 	}
+	
+	CacheInst.Results();
 	return 0;
 }
